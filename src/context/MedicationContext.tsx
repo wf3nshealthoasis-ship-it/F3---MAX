@@ -42,7 +42,18 @@ interface MedicationContextType {
 
 const MedicationContext = createContext<MedicationContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'f3_medications_cache_v2';
+const LOCAL_STORAGE_KEY = 'f3_medications_cache_v3';
+
+// Helper to strip undefined values so Firestore never rejects payloads
+function sanitizeForFirestore<T extends Record<string, any>>(obj: T): T {
+  const result: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      result[key] = val;
+    }
+  }
+  return result;
+}
 
 export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -91,7 +102,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // Real-time Firestore sync
+  // Real-time Firestore sync with timestamp-aware conflict resolution
   useEffect(() => {
     const medsRef = collection(db, 'medications');
 
@@ -99,15 +110,42 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       medsRef,
       (snapshot) => {
         if (!snapshot.empty) {
-          const items: MedicationItem[] = [];
+          const serverItemsMap = new Map<string, MedicationItem>();
           snapshot.forEach((d) => {
-            items.push(d.data() as MedicationItem);
+            const data = d.data() as MedicationItem;
+            if (data.id && data.medicationName) {
+              serverItemsMap.set(data.id, data);
+            }
           });
-          setMedications(items);
-          saveToLocalCache(items);
+
+          setMedications((prev) => {
+            // Merge: preserve local item if it has a more recent local update than server snapshot
+            const merged = prev.map((localItem) => {
+              const serverItem = serverItemsMap.get(localItem.id);
+              if (!serverItem) return localItem;
+              if (
+                localItem.updatedAt &&
+                serverItem.updatedAt &&
+                localItem.updatedAt > serverItem.updatedAt
+              ) {
+                return localItem;
+              }
+              return serverItem;
+            });
+
+            // Append any new records from server that are not yet in local
+            serverItemsMap.forEach((serverItem, id) => {
+              if (!merged.some((m) => m.id === id)) {
+                merged.push(serverItem);
+              }
+            });
+
+            saveToLocalCache(merged);
+            return merged;
+          });
           setLoading(false);
         } else {
-          // If Firestore is completely empty, initialize automatically
+          // If Firestore is empty, seed from the Ward F3 initial dataset
           seedWardF3DataForUser(currentUser?.uid || 'ward-f3').catch((err) => {
             console.warn('Initial seed error:', err);
           });
@@ -132,7 +170,6 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: new Date().toISOString(),
     }));
 
-    // Update local state immediately
     setMedications(items);
     saveToLocalCache(items);
 
@@ -140,7 +177,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const batch = writeBatch(db);
       for (const medData of items) {
         const docRef = doc(db, 'medications', medData.id);
-        batch.set(docRef, medData);
+        batch.set(docRef, sanitizeForFirestore(medData));
       }
       await batch.commit();
     } catch (err) {
@@ -169,17 +206,17 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Instant optimistic update
+    // 1. Instant optimistic update in memory & local storage
     setMedications((prev) => {
       const next = [newMed, ...prev.filter((m) => m.id !== id)];
       saveToLocalCache(next);
       return next;
     });
 
-    // 2. Cloud sync
+    // 2. Cloud sync in Firestore
     try {
       const docRef = doc(db, 'medications', id);
-      await setDoc(docRef, newMed);
+      await setDoc(docRef, sanitizeForFirestore(newMed));
     } catch (err) {
       console.warn('Cloud write failed, stored locally:', err);
     }
@@ -189,12 +226,13 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Update Medication
   const updateMedication = async (id: string, data: Partial<MedicationItem>): Promise<void> => {
+    const nowIso = new Date().toISOString();
     const updatedPayload = {
       ...data,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowIso,
     };
 
-    // 1. Instant optimistic state update
+    // 1. Instant optimistic state update and local cache persistence
     setMedications((prev) => {
       const next = prev.map((item) => {
         if (item.id === id) {
@@ -209,9 +247,9 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // 2. Cloud sync in Firestore
     try {
       const docRef = doc(db, 'medications', id);
-      await setDoc(docRef, updatedPayload, { merge: true });
+      await setDoc(docRef, sanitizeForFirestore(updatedPayload), { merge: true });
     } catch (err) {
-      console.warn('Cloud update failed, stored locally:', err);
+      console.warn('Cloud update failed, stored locally in cache:', err);
     }
   };
 

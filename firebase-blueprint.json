@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information and clinical settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 50 },
+        "ward": { "type": "string", "maxLength": 50 },
+        "hospital": { "type": "string", "maxLength": 100 },
+        "pushEnabled": { "type": "boolean" },
+        "reminderLeadTimes": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Medication": {
+      "title": "Medication",
+      "description": "Individual medication record with renewal schedule and clinical metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "patientRoom": { "type": "string", "maxLength": 20 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "medicationName": { "type": "string", "maxLength": 150 },
+        "dose": { "type": "string", "maxLength": 80 },
+        "form": { "type": "string", "maxLength": 50 },
+        "frequency": { "type": "string", "maxLength": 100 },
+        "frequencyCode": { "type": "string", "maxLength": 50 },
+        "doseTimes": { "type": "string", "maxLength": 200 },
+        "startDate": { "type": "string", "maxLength": 30 },
+        "endDate": { "type": "string", "maxLength": 30 },
+        "endTime": { "type": "string", "maxLength": 30 },
+        "renewDate": { "type": "string", "maxLength": 30 },
+        "renewTime": { "type": "string", "maxLength": 30 },
+        "reminderDays": { "type": "array" },
+        "prescribingDoctor": { "type": "string", "maxLength": 100 },
+        "pharmacy": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "maxLength": 20 },
+        "ptom": { "type": "string", "maxLength": 50 },
+        "attachments": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["medicationName", "dose", "frequency", "renewDate", "userId"]
+    },
+    "NotificationLog": {
+      "title": "NotificationLog",
+      "description": "Medication renewal notification records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "medicationId": { "type": "string", "maxLength": 128 },
+        "medicationName": { "type": "string", "maxLength": 150 },
+        "patientRoom": { "type": "string", "maxLength": 20 },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 500 },
+        "urgencyLevel": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 },
+        "scheduledTime": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "medicationName", "status", "scheduledTime"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and preferences"
+    },
+    "/medications/{medicationId}": {
+      "schema": "Medication",
+      "description": "Medication chart records scoped to user or ward"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "NotificationLog",
+      "description": "Renewal alerts and notification logs"
+    }
+  }
+}

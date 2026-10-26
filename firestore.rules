@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User profile documents
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.uid == userId;
+      allow update: if isOwner(userId) && request.resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+    }
+
+    // Medications collection
+    match /medications/{medicationId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() 
+        && isValidId(medicationId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.medicationName is string
+        && request.resource.data.medicationName.size() <= 150;
+      allow update: if isSignedIn() 
+        && isValidId(medicationId)
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() 
+        && isValidId(medicationId)
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() 
+        && isValidId(notificationId)
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() 
+        && isValidId(notificationId)
+        && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() 
+        && isValidId(notificationId)
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // Test connection doc
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

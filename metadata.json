@@ -1,0 +1,8 @@
+{
+  "name": "F3 - Medication Chart",
+  "description": "Comprehensive digital medication management and administration record system for Ward F3 at Health Oasis Hospital, featuring real-time renewal tracking, frequency schedules, and clinical documentation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

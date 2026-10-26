@@ -1,0 +1,683 @@
+# F3 - MEDICATION CHART
+
+## Product Requirements Document (PRD)
+
+***
+
+## 1\. Overview
+
+**App Name:** F3 - Medication Chart
+
+F3 - Medication Chart is a Progressive Web App (PWA) designed to serve as a comprehensive digital medication management system for individuals, caregivers, and healthcare support staff. The application enables users to record, manage, and track all medication details — including dosage, frequency, start and end dates, renewal schedules, and file attachments such as prescriptions and lab reports. Users receive timely notifications (1, 2, or 3 days before renewal) with date and time precision, ensuring no medication lapse or missed renewal. All records are fully editable, color-coded for quick visual identification of renewal urgency, and printable with renewal date/time filtering for reports or handoffs.
+
+**Target Audience:** Patients managing chronic conditions, family caregivers, home healthcare workers, nursing staff, and clinics managing multiple patient medication schedules. The core problem the app solves is the fragmented, paper-based, or error-prone nature of medication tracking — especially around renewal deadlines — by centralizing all medication data, reminders, and documentation in a single accessible PWA.
+
+***
+
+## 2\. Essential Core Features
+
+### 2.1 Medication Management (CRUD)
+
+* **Add Medication:** Full form to enter medication name, dosage, form (tablet/capsule/liquid/injection/other), frequency (e.g., once daily, twice daily, every X hours, custom), prescribing doctor, pharmacy, notes, start date/time, end date/time, and renewal date/time.
+* **Edit Medication:** All fields in the medication record are fully editable at any time, including all dates, times, frequency, and attachments.
+* **Delete Medication:** Soft delete with confirmation prompt to avoid accidental removal.
+* **View Medication Detail:** Full detail screen showing all stored information for a single medication.
+
+### 2.2 Frequency Management
+
+* Predefined frequency options: Once daily, Twice daily, Three times daily, Four times daily, Every X hours (custom), Weekly, As needed (PRN), Custom schedule.
+* Custom frequency builder allowing users to define specific days and times.
+* Frequency displayed prominently on medication cards.
+
+### 2.3 File Attachment Management
+
+* Upload and attach multiple files per medication (prescriptions, doctor notes, insurance documents, lab reports).
+* Supported file types: PDF, JPG, PNG, DOCX.
+* Preview attached files within the app.
+* Delete or replace attachments at any time.
+* Attachments stored securely via Supabase Storage.
+
+### 2.4 Renewal Scheduling & Notifications
+
+* Set renewal date and time per medication.
+* Configure renewal reminder lead time: 1 day before, 2 days before, and/or 3 days before (multiple selections allowed).
+* Push notifications (via PWA Web Push API) sent at configured lead times on the set time.
+* In-app notification center to view pending and past renewal alerts.
+* Notification status (sent/pending/dismissed) tracked per medication.
+
+### 2.5 Color-Coded Renewal Identification
+
+* Each medication card and list item is visually color-coded based on renewal urgency:
+    * 🔴 **Red:** Renewal due today or overdue.
+    * 🟠 **Orange:** Renewal due within 1 day.
+    * 🟡 **Yellow:** Renewal due within 2–3 days.
+    * 🟢 **Green:** Renewal not due soon (more than 3 days away).
+    * ⚫ **Grey:** No renewal date set or medication ended.
+* Color legend visible on the dashboard for reference.
+
+### 2.6 Print & Export
+
+* Print medication chart filtered by renewal date/time range.
+* Print view shows: medication name, dosage, frequency, start/end dates, renewal date, doctor, pharmacy, and notes.
+* Option to export as PDF (browser print-to-PDF or generated PDF via client-side library).
+* Print filter: select date range for renewal dates to include in the report.
+* Clean, formatted print layout with F3 Medication Chart branding and patient/user name.
+
+### 2.7 Dashboard & Filtering
+
+* Dashboard overview showing all medications grouped or sorted by renewal urgency (color-coded).
+* Filter medications by: renewal date range, color/urgency status, active/inactive/all status, frequency type.
+* Search bar to find medications by name or doctor.
+* Sort by: renewal date (ascending/descending), medication name (A–Z), start date.
+
+### 2.8 User Authentication
+
+* Secure sign-up and login via Supabase Auth (email/password).
+* Password reset via email.
+* Optional: User profile setup with name (used in print headers).
+
+### 2.9 User Profile & Settings
+
+* Edit profile name and contact details.
+* Manage notification preferences (enable/disable push notifications, select global reminder lead times).
+* View app version and account details.
+* Log out.
+
+***
+
+## 3\. Tech Stack
+
+### Front-End
+
+* **Framework:** React (with hooks and context API for state management)
+* **Styling:** Tailwind CSS
+* **Build Tool:** Vite
+* **PWA:** Vite PWA Plugin (`vite-plugin-pwa`) with a custom service worker for offline caching and Web Push notification support
+* **PDF/Print:** `react-to-print` for in-browser printing; `jsPDF` + `html2canvas` for PDF export
+* **File Preview:** `react-pdf` for PDF previews; native `<img>` tags for image attachments
+* **Date & Time:** `date-fns` for all date formatting, comparison, and manipulation
+* **Icons:** `lucide-react`
+* **Form Management:** `react-hook-form` with `zod` validation
+* **Notifications (In-app):** Custom notification context with local state + Supabase real-time sync
+
+### Back-End
+
+* **Platform:** Supabase
+    * **Authentication:** Supabase Auth (email/password, session management)
+    * **Database:** Supabase PostgreSQL — tables for users, medications, attachments, notification\_settings, notification\_logs
+    * **Storage:** Supabase Storage buckets for file attachments (per-user private buckets)
+    * **Real-Time:** Supabase Realtime for syncing medication updates and notification state across sessions
+    * **Edge Functions:** Supabase Edge Functions (Deno) for scheduling and triggering Web Push notifications based on renewal dates
+
+### APIs & Integrations
+
+* **Web Push API:** Browser-native Web Push for PWA push notifications (VAPID keys managed via Supabase Edge Functions)
+* **Web Share API:** Allow sharing medication summaries via native device share sheet
+* **PWA Manifest:** Full PWA manifest for installability on Android and iOS home screens
+
+### Technical Requirements
+
+* Fully responsive design optimized for mobile screens (360px–430px width primary target) while remaining usable on tablet and desktop.
+* Offline support: Service worker caches the app shell, medication list, and recent data for offline reading.
+* HTTPS required for PWA and Web Push functionality.
+* All user data scoped by authenticated user ID (Row Level Security enabled in Supabase).
+
+***
+
+## 4\. Design Preferences
+
+### Interface
+
+The app features a clean, clinical-yet-approachable mobile-first interface with card-based layouts, strong color-coded renewal indicators, and intuitive bottom navigation — delivering a feel similar to a polished health management app with clear visual hierarchy and accessibility-first design.
+
+### Color Palette
+
+| Role | Color | Hex |
+| ---- | ----- | --- |
+| Primary | Deep Medical Blue | `#1A5276` |
+| Secondary | Soft White / Light Grey | `#F4F6F9` |
+| Accent | Teal / Cyan | `#17A589` |
+| Danger / Overdue | Red | `#E74C3C` |
+| Warning 1-day | Orange | `#E67E22` |
+| Warning 2-3 days | Amber Yellow | `#F1C40F` |
+| Safe / On-track | Soft Green | `#27AE60` |
+| No Renewal / Inactive | Medium Grey | `#95A5A6` |
+| Text Primary | Dark Charcoal | `#1C2833` |
+| Text Secondary | Medium Grey | `#717D7E` |
+
+### Typography
+
+* **Headings:** `Inter` (Bold, 700) — clean, modern, highly legible on mobile
+* **Body/Labels:** `Inter` (Regular/Medium, 400/500)
+* **Medication Names (Cards):** `Inter` Semi-Bold (600) for emphasis
+* **Monospace (dates/times):** `JetBrains Mono` or `Roboto Mono` for consistent date/time display
+
+### Additional Design Considerations
+
+* Bottom navigation bar with 4–5 tabs as primary navigation pattern for mobile PWA.
+* Floating Action Button (FAB) for adding new medications on dashboard and list screens.
+* Card-based medication items with a left-side colored vertical stripe indicating renewal urgency color.
+* Pull-to-refresh on the medication list.
+* Full-screen modal sheets for Add/Edit medication forms (slides up from bottom).
+* Haptic feedback simulation via CSS micro-animations on button interactions.
+* Dark mode support (optional phase 2 consideration; foundation to be laid with Tailwind dark classes).
+* All interactive elements have minimum 44×44px touch targets per mobile accessibility guidelines.
+
+***
+
+## 5\. All Screens / Pages
+
+***
+
+### Screen 1: Splash / Loading Screen
+
+**Route:** `/` (initial load, redirects after auth check)
+
+**UI Elements:**
+
+* F3 Medication Chart logo (centered)
+* App tagline: "Your Medication. Managed."
+* Animated loading spinner (teal accent)
+* Background in primary deep blue
+
+**Navigation:**
+
+* Auto-redirects to `/dashboard` if user is authenticated
+* Auto-redirects to `/login` if no active session
+
+**Conditional Elements:**
+
+* Visible only during initial app load and auth state check (2–3 seconds maximum)
+
+***
+
+### Screen 2: Login Screen
+
+**Route:** `/login`
+
+**UI Elements:**
+
+* F3 logo at top
+* Screen title: "Sign In"
+* Email input field (with validation)
+* Password input field (with show/hide toggle)
+* "Forgot Password?" text link → navigates to `/forgot-password`
+* "Sign In" primary CTA button
+* "Don't have an account? Sign Up" link → navigates to `/signup`
+* Error message banner (conditional, shown on failed login)
+
+**Navigation:**
+
+* Successful login → `/dashboard`
+* "Sign Up" link → `/signup`
+* "Forgot Password" → `/forgot-password`
+
+**Conditional Elements:**
+
+* Error banner visible only on authentication failure
+* Loading state on Sign In button during API call
+
+***
+
+### Screen 3: Sign Up Screen
+
+**Route:** `/signup`
+
+**UI Elements:**
+
+* F3 logo at top
+* Screen title: "Create Account"
+* Full Name input field
+* Email input field
+* Password input field (with show/hide toggle)
+* Confirm Password field
+* "Create Account" primary CTA button
+* "Already have an account? Sign In" link → `/login`
+* Success toast on successful registration
+* Error message banner (conditional)
+
+**Navigation:**
+
+* Successful sign-up → auto-login → `/dashboard`
+* "Sign In" link → `/login`
+
+**Conditional Elements:**
+
+* Real-time password strength indicator
+* Error messages per field (inline validation)
+
+***
+
+### Screen 4: Forgot Password Screen
+
+**Route:** `/forgot-password`
+
+**UI Elements:**
+
+* Back arrow to return to `/login`
+* Screen title: "Reset Password"
+* Instructional text
+* Email input field
+* "Send Reset Link" button
+* Success confirmation message (conditional — shown after email sent)
+* "Back to Sign In" link
+
+**Navigation:**
+
+* Back arrow / "Back to Sign In" → `/login`
+
+**Conditional Elements:**
+
+* Success state replaces the form after email is sent
+
+***
+
+### Screen 5: Dashboard Screen
+
+**Route:** `/dashboard`
+
+**UI Elements:**
+
+* Top app bar: F3 logo + "F3 Medication Chart" title + notification bell icon (with badge count)
+* Summary stat cards row:
+    * Total Medications (count)
+    * Due Today (count, red badge)
+    * Upcoming Renewals in 3 days (count, yellow badge)
+* Color legend strip (Red = Overdue, Orange = 1 Day, Yellow = 2–3 Days, Green = Safe, Grey = No Renewal)
+* Section: "Renewal Alerts" — horizontal scroll card list of medications due for renewal (color-coded)
+* Section: "All Medications" — vertical scrollable list of medication cards (color-coded left stripe)
+* Each medication card shows:
+    * Color stripe (left side)
+    * Medication name
+    * Dosage + Frequency
+    * Renewal date/time (badge)
+    * Status pill (Active/Inactive/Ended)
+    * Attachment icon (if files attached)
+* Search bar (filters card list in real time)
+* Filter icon button (opens filter bottom sheet)
+* Sort dropdown (Renewal Date, Name, Start Date)
+* Floating Action Button (FAB) — "+" icon → opens Add Medication modal
+* Bottom navigation bar
+
+**Navigation:**
+
+* Tap medication card → `/medication/:id` (detail view)
+* FAB → `/medication/add` (add modal)
+* Bell icon → `/notifications`
+* Filter sheet → inline bottom sheet (not a new route)
+* Bottom nav → respective routes
+
+**Conditional Elements:**
+
+* Empty state illustration if no medications added
+* "Overdue" banner at top if any renewals are past due
+* Notification badge only if unread notifications exist
+
+***
+
+### Screen 6: Medication Detail Screen
+
+**Route:** `/medication/:id`
+
+**UI Elements:**
+
+* Top app bar with back arrow, medication name as title, Edit icon (pencil), and Delete icon (trash)
+* Color-coded header banner (renewal urgency color)
+* Information sections (cards/rows):
+    * **Medication Info:** Name, Form, Dosage, Frequency (with custom schedule if set)
+    * **Schedule:** Start Date/Time, End Date/Time, Renewal Date/Time
+    * **Renewal Reminder:** Configured reminder days (1/2/3 days shown as chips)
+    * **Doctor & Pharmacy:** Prescribing doctor name, pharmacy name
+    * **Notes:** Free-text notes field
+* **Attachments Section:**
+    * Grid/list of attached files (thumbnail for images, PDF icon for PDFs)
+    * Tap attachment → opens full-screen preview or download
+    * "+ Add Attachment" button
+* **Notification Status:** Shows last notification sent, next scheduled notification
+* "Print / Export" button → opens print options modal
+* Bottom navigation bar
+
+**Navigation:**
+
+* Back arrow → `/dashboard`
+* Edit icon → `/medication/:id/edit` or opens edit modal
+* Delete icon → confirmation dialog → deletes → `/dashboard`
+* "+ Add Attachment" → file picker (native)
+* "Print / Export" → print modal overlay
+
+**Conditional Elements:**
+
+* Color banner changes based on renewal status
+* Attachment section hidden or shows "No attachments" empty state if none exist
+* End Date badge shown as "Ended" if past end date
+
+***
+
+### Screen 7: Add Medication Screen
+
+**Route:** `/medication/add`
+
+**UI Elements:**
+
+* Full-screen modal sheet (slides up from bottom)
+* Top bar: "Add Medication" title + "Cancel" text button (left) + "Save" text button (right, disabled until form valid)
+* Scrollable form sections:
+    * **Basic Info:**
+        * Medication Name (text input, required)
+        * Medication Form (select: Tablet / Capsule / Liquid / Injection / Cream / Inhaler / Other)
+        * Dosage (text input with unit selector: mg / ml / mcg / units)
+    * **Frequency:**
+        * Frequency selector (dropdown/segmented: Once Daily / Twice Daily / Three Times Daily / Four Times Daily / Every X Hours / Weekly / As Needed / Custom)
+        * Custom frequency builder (shown conditionally): day-of-week toggles + time pickers per dose
+    * **Schedule:**
+        * Start Date + Time pickers (date-time picker)
+        * End Date + Time pickers (optional)
+        * Renewal Date + Time pickers
+    * **Renewal Notifications:**
+        * Toggle chips: "1 Day Before", "2 Days Before", "3 Days Before" (multi-select)
+    * **Doctor & Pharmacy:**
+        * Prescribing Doctor name (text input)
+        * Pharmacy name (text input)
+    * **Notes:** Multi-line text area
+    * **Attachments:**
+        * "Attach Files" button → native file picker
+        * Attached file preview chips with remove (×) option
+* "Save Medication" primary button (sticky at bottom)
+
+**Navigation:**
+
+* "Cancel" → dismisses modal → returns to previous screen
+* Successful save → dismisses modal → updates medication list → toast confirmation
+
+**Conditional Elements:**
+
+* Custom frequency builder section shown only when "Custom" is selected
+* End Date is optional (greyed hint text)
+* Form validation messages inline per field
+* Save button disabled until required fields are valid
+
+***
+
+### Screen 8: Edit Medication Screen
+
+**Route:** `/medication/:id/edit`
+
+**UI Elements:**
+
+* Identical form layout to Add Medication screen (Screen 7)
+* Top bar: "Edit Medication" title + "Cancel" + "Update" button
+* All fields pre-populated with existing medication data (fully editable)
+* Existing attachments listed with options to remove individual attachments or add new ones
+* "Delete Medication" destructive button at bottom of form (red text)
+
+**Navigation:**
+
+* "Cancel" → `/medication/:id` (detail screen)
+* Successful update → `/medication/:id` with updated data + toast confirmation
+* "Delete Medication" → confirmation dialog → deletes → `/dashboard`
+
+**Conditional Elements:**
+
+* Same conditional logic as Add Medication for custom frequency builder
+* Existing attachments show "uploaded" vs "new" state during editing session
+
+***
+
+### Screen 9: Notifications Screen
+
+**Route:** `/notifications`
+
+**UI Elements:**
+
+* Top app bar: back arrow + "Notifications" title + "Mark All Read" text button
+* Segmented tabs: "Pending" \| "Sent" \| "Dismissed"
+* Notification list items (per tab):
+    * Medication name
+    * Notification type (e.g., "Renewal in 1 Day")
+    * Scheduled date/time for notification
+    * Color-coded left stripe matching renewal urgency
+    * Status badge (Pending / Sent / Dismissed)
+    * Tap item → navigates to `/medication/:id`
+* Empty state per tab if no notifications exist
+* Pull-to-refresh
+
+**Navigation:**
+
+* Back arrow → `/dashboard`
+* Tap notification item → `/medication/:id`
+
+**Conditional Elements:**
+
+* "Mark All Read" only shown when unread notifications exist in "Pending" tab
+* Badge count on bottom nav bell icon reflects unread pending count
+
+***
+
+### Screen 10: Print / Export Modal (Overlay)
+
+**Route:** Overlay modal (accessible from `/medication/:id` and `/dashboard`)
+
+**UI Elements:**
+
+* Modal sheet title: "Print / Export Medication Chart"
+* **Filter Options:**
+    * Renewal Date Range picker: "From" date + "To" date
+    * Color/Status filter: checkboxes for (Overdue, Due in 1 Day, Due in 2–3 Days, Active/Safe, All)
+    * Single medication vs. all medications toggle
+* **Print Preview:** Collapsible preview of what will be printed (medication name, dosage, frequency, start/end, renewal date, doctor, pharmacy, notes)
+* "Print / Save as PDF" primary button → triggers browser print dialog
+* "Cancel" button → dismisses modal
+
+**Navigation:**
+
+* "Cancel" → dismisses modal, returns to originating screen
+* "Print" → browser native print dialog
+
+**Conditional Elements:**
+
+* Preview updates dynamically as filters change
+* If no medications match filter, shows "No medications match the selected filters" message
+
+***
+
+### Screen 11: Profile & Settings Screen
+
+**Route:** `/settings`
+
+**UI Elements:**
+
+* Top app bar: "Settings" title
+* **Profile Section:**
+    * Avatar/initials display
+    * Full name (editable inline)
+    * Email (displayed, not editable here)
+    * "Edit Profile" button → inline edit mode
+* **Notification Preferences:**
+    * Enable/Disable Push Notifications (toggle)
+    * Default reminder: "1 Day Before", "2 Days Before", "3 Days Before" (multi-select chips as global default)
+* **Account:**
+    * Change Password button → navigates to `/change-password` or opens modal
+    * "Log Out" button (with confirmation prompt)
+* **App Info:**
+    * App version number
+    * "About F3 Medication Chart" text
+* Bottom navigation bar
+
+**Navigation:**
+
+* Bottom nav → respective screens
+* "Log Out" → `/login` after session cleared
+
+**Conditional Elements:**
+
+* Push notification toggle triggers browser permission prompt if not yet granted
+* "Edit Profile" shows save/cancel inline edit controls
+
+***
+
+### Screen 12: Change Password Screen
+
+**Route:** `/change-password`
+
+**UI Elements:**
+
+* Back arrow → `/settings`
+* Screen title: "Change Password"
+* Current Password input (show/hide toggle)
+* New Password input (show/hide toggle + strength indicator)
+* Confirm New Password input
+* "Update Password" primary button
+* Success toast on completion
+
+**Navigation:**
+
+* Back arrow → `/settings`
+* Successful update → `/settings` with success toast
+
+***
+
+## 6\. App Menu and Navigation Structure
+
+### Navigation System
+
+**Primary Navigation:** Fixed Bottom Navigation Bar (5 tabs) — standard PWA mobile pattern.
+
+### Bottom Navigation Tabs
+
+| Tab | Icon | Route | Label |
+| --- | ---- | ----- | ----- |
+| 1 | 🏠 Home | `/dashboard` | Dashboard |
+| 2 | 💊 Medications | `/medications` (filtered list view) | Medications |
+| 3 | ➕ Add (FAB) | Opens Add modal | Add |
+| 4 | 🔔 Alerts | `/notifications` | Alerts |
+| 5 | ⚙️ Settings | `/settings` | Settings |
+
+> **Note:** The center "+" tab is a Floating Action Button (FAB) styled within the bottom nav bar, visually elevated with teal accent color and a circular shape — a common mobile PWA pattern.
+
+### Navigation Hierarchy
+
+```
+Root
+├── /login
+│   └── /signup
+│   └── /forgot-password
+├── /dashboard (Home Tab)
+│   ├── /medication/:id (Detail)
+│   │   └── /medication/:id/edit (Edit Modal)
+│   └── [Add Medication Modal] → /medication/add
+├── /medications (Medications Tab — full filterable list)
+│   ├── /medication/:id
+│   └── [Filters Bottom Sheet]
+├── [Add Modal] (Center FAB Tab)
+├── /notifications (Alerts Tab)
+│   └── /medication/:id (via notification tap)
+└── /settings (Settings Tab)
+    └── /change-password
+```
+
+### Secondary Navigation Elements
+
+* **Top App Bar Back Arrow:** Contextual back navigation within detail/edit flows.
+* **Modal Sheets:** Add and Edit medication screens present as full-screen bottom sheets (not page navigations), preserving navigation context.
+* **Filter Bottom Sheet:** On dashboard and medication list, filter options appear as a bottom drawer sheet — does not change route.
+* **Print Modal Overlay:** Accessible from detail and dashboard via action buttons.
+
+***
+
+## 7\. User Flow
+
+### Flow 1: New User Onboarding & First Medication
+
+1. User opens the PWA in browser or from installed home screen icon.
+2. Splash screen loads (2 seconds) → detects no session → redirects to `/login`.
+3. User taps "Don't have an account? Sign Up" → navigates to `/signup`.
+4. User enters Full Name, Email, Password, Confirm Password → taps "Create Account".
+5. Supabase creates account → user auto-logged in → redirected to `/dashboard`.
+6. Dashboard shows empty state: "No medications yet. Tap + to add your first medication."
+7. User taps the central "+" FAB in bottom navigation.
+8. Add Medication modal slides up from bottom.
+9. User fills in: Medication Name ("Metformin"), Form (Tablet), Dosage (500mg), Frequency (Twice Daily).
+10. User selects Start Date (today) and sets Renewal Date (30 days from today) and Renewal Time (09:00 AM).
+11. User selects renewal reminder chips: "1 Day Before" and "2 Days Before".
+12. User taps "+ Attach Files" → device file picker opens → selects prescription PDF.
+13. PDF attachment appears in the form as a chip.
+14. User adds Doctor name and Pharmacy name.
+15. User taps "Save Medication."
+16. Modal dismisses → Dashboard now shows the new medication card with a **Green** color stripe (renewal 30 days away).
+17. Success toast appears: "Metformin added successfully."
+18. Browser prompts for push notification permission (triggered on first notification-enabled medication save).
+19. User taps "Allow" → notification subscription stored in Supabase.
+
+***
+
+### Flow 2: Viewing & Editing a Medication
+
+1. From `/dashboard`, user sees medication cards sorted by renewal urgency.
+2. User notices a card with an **Orange** stripe ("Renewal in 1 Day").
+3. User taps the card → navigates to `/medication/:id`.
+4. Detail screen shows all medication info with orange header banner.
+5. User sees the renewal date/time, notification settings, and existing attachments.
+6. User taps the Edit (pencil) icon in the top app bar.
+7. Edit Medication modal slides up with all fields pre-populated.
+8. User updates the Renewal Date to 7 days from now and adjusts dosage.
+9. User taps "Update."
+10. Modal dismisses → detail screen refreshes → color stripe changes to **Green** (now 7 days away).
+11. Toast: "Medication updated successfully."
+
+***
+
+### Flow 3: Managing Attachments
+
+1. User is on `/medication/:id` detail screen.
+2. User scrolls to "Attachments" section → sees 1 existing prescription PDF.
+3. User taps the PDF thumbnail → full-screen preview/viewer opens.
+4. User closes preview → back on detail screen.
+5. User taps "+ Add Attachment" → file picker opens → selects a JPG image (lab report).
+6. New image thumbnail appears in attachments grid.
+7. User long-presses (or taps × icon) on the old PDF attachment → confirmation dialog: "Remove this attachment?"
+8. User confirms → attachment deleted from Supabase Storage and removed from view.
+
+***
+
+### Flow 4: Receiving & Acting on Renewal Notification
+
+1. It is 1 day before a medication's renewal date at 09:00 AM.
+2. Supabase Edge Function triggers Web Push notification to user's device.
+3. User receives push notification: "💊 Metformin renewal due tomorrow! Tap to view details."
+4. User taps notification → PWA opens (or foregrounds) → navigates directly to `/medication/:id`.
+5. Color stripe is now **Orange** (1 day away).
+6. User arranges refill and returns to edit screen to update the renewal date.
+7. Notification is logged as "Sent" in Supabase notification\_logs table.
+8. In-app `/notifications` screen shows the notification under "Sent" tab.
+
+***
+
+### Flow 5: Printing a Filtered Medication Chart
+
+1. From `/dashboard`, user taps the print/share icon (available in top app bar or via FAB menu).
+2. Print / Export modal slides up.
+3. User sets Renewal Date Range: From "this week" To "next 30 days."
+4. User selects color filters: "Overdue" + "Due in 1–3 Days."
+5. Print preview updates to show 3 matching medications.
+6. User taps "Print / Save as PDF."
+7. Browser native print dialog opens.
+8. User selects "Save as PDF" or sends to printer.
+9. Printed report shows: App name header, date printed, user name, and a clean table of matching medications with all details.
+10. User closes print dialog → modal dismisses.
+
+***
+
+### Flow 6: Notification Preferences & Settings
+
+1. User taps "Settings" tab in bottom navigation → `/settings`.
+2. User sees Push Notifications toggle is ON.
+3. User scrolls to "Default Reminder" chips → currently "1 Day Before" is selected.
+4. User taps "3 Days Before" to also enable it.
+5. User scrolls to Profile section → taps "Edit Profile" → updates their name.
+6. User taps "Save" → profile name updated → used in future print report headers.
+7. User taps "Log Out" → confirmation prompt appears.
+8. User confirms → session cleared → redirected to `/login`.
+
+***
+
+*End of PRD — F3 Medication Chart*

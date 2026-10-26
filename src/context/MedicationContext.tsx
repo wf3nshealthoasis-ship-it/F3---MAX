@@ -5,11 +5,9 @@ import {
   setDoc,
   deleteDoc,
   onSnapshot,
-  query,
-  where,
   writeBatch,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import {
   MedicationItem,
@@ -44,10 +42,32 @@ interface MedicationContextType {
 
 const MedicationContext = createContext<MedicationContextType | undefined>(undefined);
 
+const LOCAL_STORAGE_KEY = 'f3_medications_cache_v2';
+
 export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
-  const [medications, setMedications] = useState<MedicationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [medications, setMedications] = useState<MedicationItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading local cache:', e);
+    }
+    // Default initial seed
+    return INITIAL_WARD_F3_MEDICATIONS.map((m) => ({
+      ...m,
+      userId: 'ward-f3',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+  });
+
+  const [loading, setLoading] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(() => {
     try {
@@ -62,54 +82,39 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterUrgency, setFilterUrgency] = useState<UrgencyLevel | 'all' | 'hold'>('all');
 
+  // Helper to persist state to local cache
+  const saveToLocalCache = (items: MedicationItem[]) => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+      console.warn('LocalStorage save error:', e);
+    }
+  };
+
   // Real-time Firestore sync
   useEffect(() => {
-    if (!currentUser) {
-      // In guest or unauthenticated state, load pre-seeded Ward F3 medications in local memory
-      const localSeed: MedicationItem[] = INITIAL_WARD_F3_MEDICATIONS.map((m) => ({
-        ...m,
-        userId: 'demo-ward-f3',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-      setMedications(localSeed);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
     const medsRef = collection(db, 'medications');
-    const q = query(medsRef, where('userId', '==', currentUser.uid));
 
     const unsubscribe = onSnapshot(
-      q,
+      medsRef,
       (snapshot) => {
-        const items: MedicationItem[] = [];
-        snapshot.forEach((d) => {
-          items.push(d.data() as MedicationItem);
-        });
-
-        // If user has zero records in cloud, auto-initialize with Ward F3 patient records
-        if (items.length === 0 && !snapshot.metadata.hasPendingWrites) {
-          // Initialize automatically so user immediately has live data
-          seedWardF3DataForUser(currentUser.uid).catch((err) => {
+        if (!snapshot.empty) {
+          const items: MedicationItem[] = [];
+          snapshot.forEach((d) => {
+            items.push(d.data() as MedicationItem);
+          });
+          setMedications(items);
+          saveToLocalCache(items);
+          setLoading(false);
+        } else {
+          // If Firestore is completely empty, initialize automatically
+          seedWardF3DataForUser(currentUser?.uid || 'ward-f3').catch((err) => {
             console.warn('Initial seed error:', err);
           });
-        } else {
-          setMedications(items);
-          setLoading(false);
         }
       },
       (error) => {
-        console.error('Firestore onSnapshot error:', error);
-        // Fallback to local default records if offline or permission denied
-        const localSeed: MedicationItem[] = INITIAL_WARD_F3_MEDICATIONS.map((m) => ({
-          ...m,
-          userId: currentUser.uid,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }));
-        setMedications(localSeed);
+        console.warn('Firestore onSnapshot listener error (running in local mode):', error);
         setLoading(false);
       }
     );
@@ -120,36 +125,26 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Seed Ward F3 Real Patient Records
   const seedWardF3DataForUser = async (userId: string) => {
     setIsSeeding(true);
+    const items: MedicationItem[] = INITIAL_WARD_F3_MEDICATIONS.map((m) => ({
+      ...m,
+      userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    // Update local state immediately
+    setMedications(items);
+    saveToLocalCache(items);
+
     try {
-      // Use batches of 500 (141 items is well within single batch)
       const batch = writeBatch(db);
-      const items: MedicationItem[] = [];
-
-      for (const m of INITIAL_WARD_F3_MEDICATIONS) {
-        const docRef = doc(db, 'medications', m.id);
-        const medData: MedicationItem = {
-          ...m,
-          userId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+      for (const medData of items) {
+        const docRef = doc(db, 'medications', medData.id);
         batch.set(docRef, medData);
-        items.push(medData);
       }
-
       await batch.commit();
-      setMedications(items);
     } catch (err) {
-      console.error('Failed to seed batch in cloud Firestore:', err);
-      // Fallback local memory
-      setMedications(
-        INITIAL_WARD_F3_MEDICATIONS.map((m) => ({
-          ...m,
-          userId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }))
-      );
+      console.warn('Failed to seed batch in cloud Firestore (using local storage):', err);
     } finally {
       setIsSeeding(false);
       setLoading(false);
@@ -157,8 +152,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const seedWardF3Data = async () => {
-    if (!currentUser) return;
-    await seedWardF3DataForUser(currentUser.uid);
+    await seedWardF3DataForUser(currentUser?.uid || 'ward-f3');
   };
 
   // Add Medication
@@ -166,7 +160,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     data: Omit<MedicationItem, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
   ): Promise<string> => {
     const id = 'f3-' + (data.patientRoom || 'gen') + '-' + Date.now();
-    const userId = currentUser ? currentUser.uid : 'demo-ward-f3';
+    const userId = currentUser ? currentUser.uid : 'ward-f3';
     const newMed: MedicationItem = {
       ...data,
       id,
@@ -175,16 +169,21 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: new Date().toISOString(),
     };
 
-    if (currentUser) {
+    // 1. Instant optimistic update
+    setMedications((prev) => {
+      const next = [newMed, ...prev.filter((m) => m.id !== id)];
+      saveToLocalCache(next);
+      return next;
+    });
+
+    // 2. Cloud sync
+    try {
       const docRef = doc(db, 'medications', id);
-      try {
-        await setDoc(docRef, newMed);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `medications/${id}`);
-      }
-    } else {
-      setMedications((prev) => [newMed, ...prev]);
+      await setDoc(docRef, newMed);
+    } catch (err) {
+      console.warn('Cloud write failed, stored locally:', err);
     }
+
     return id;
   };
 
@@ -195,31 +194,42 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: new Date().toISOString(),
     };
 
-    if (currentUser) {
+    // 1. Instant optimistic state update
+    setMedications((prev) => {
+      const next = prev.map((item) => {
+        if (item.id === id) {
+          return { ...item, ...updatedPayload };
+        }
+        return item;
+      });
+      saveToLocalCache(next);
+      return next;
+    });
+
+    // 2. Cloud sync in Firestore
+    try {
       const docRef = doc(db, 'medications', id);
-      try {
-        await setDoc(docRef, updatedPayload, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `medications/${id}`);
-      }
-    } else {
-      setMedications((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...updatedPayload } : item))
-      );
+      await setDoc(docRef, updatedPayload, { merge: true });
+    } catch (err) {
+      console.warn('Cloud update failed, stored locally:', err);
     }
   };
 
   // Delete Medication
   const deleteMedication = async (id: string): Promise<void> => {
-    if (currentUser) {
+    // 1. Instant optimistic state update
+    setMedications((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      saveToLocalCache(next);
+      return next;
+    });
+
+    // 2. Cloud delete
+    try {
       const docRef = doc(db, 'medications', id);
-      try {
-        await deleteDoc(docRef);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `medications/${id}`);
-      }
-    } else {
-      setMedications((prev) => prev.filter((item) => item.id !== id));
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.warn('Cloud delete failed, removed locally:', err);
     }
   };
 
@@ -228,15 +238,13 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const med = medications.find((m) => m.id === id);
     if (!med) return;
 
-    // Calculate new renewal date
     let baseDate = new Date();
     if (med.renewDate) {
       const parts = med.renewDate.split('-');
       if (parts.length === 3) {
-        baseDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        baseDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       }
     }
-    // If base date is already overdue, renew starting from today
     if (baseDate < new Date()) {
       baseDate = new Date();
     }
@@ -309,7 +317,6 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     });
 
-    // Sort by urgency: overdue first, then 1 day, then 2-3 days
     return alerts.sort((a, b) => {
       const order: Record<UrgencyLevel, number> = {
         overdue: 0,

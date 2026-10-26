@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { MedicationProvider, useMedications } from './context/MedicationContext';
 import { Header } from './components/Header';
@@ -15,12 +15,21 @@ import { testConnection } from './firebase';
 import { Plus } from 'lucide-react';
 
 function MainApp() {
+  const { medications } = useMedications();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'medications' | 'notifications' | 'settings'>('dashboard');
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [medicationToEdit, setMedicationToEdit] = useState<MedicationItem | null>(null);
-  const [selectedDetailMedication, setSelectedDetailMedication] = useState<MedicationItem | null>(null);
+  
+  // Track active detail medication by ID so updates are always reflected in real time
+  const [selectedMedicationId, setSelectedMedicationId] = useState<string | null>(null);
+
+  const activeDetailMedication = useMemo(() => {
+    if (!selectedMedicationId) return null;
+    return medications.find((m) => m.id === selectedMedicationId) || null;
+  }, [medications, selectedMedicationId]);
+
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [singlePrintMedication, setSinglePrintMedication] = useState<MedicationItem | null>(null);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
@@ -43,7 +52,7 @@ function MainApp() {
   };
 
   const handleViewDetail = (med: MedicationItem) => {
-    setSelectedDetailMedication(med);
+    setSelectedMedicationId(med.id);
   };
 
   const handlePrintAll = () => {
@@ -90,7 +99,7 @@ function MainApp() {
       <button
         onClick={handleOpenAdd}
         title="Add Patient Medication"
-        className="hidden md:flex fixed bottom-8 right-8 z-30 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-500 text-white shadow-xl items-center justify-center transition-transform hover:scale-105 active:scale-95 border-2 border-white"
+        className="hidden md:flex fixed bottom-8 right-8 z-30 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-500 text-white shadow-xl items-center justify-center transition-transform hover:scale-105 active:scale-95 border-2 border-white cursor-pointer"
       >
         <Plus className="w-7 h-7" />
       </button>
@@ -105,20 +114,21 @@ function MainApp() {
       {/* Add / Edit Medication Full-Screen Sheet */}
       <AddEditMedicationModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setMedicationToEdit(null);
+        }}
         medicationToEdit={medicationToEdit}
       />
 
-      {/* Medication Detail View Modal */}
+      {/* Medication Detail View Modal - dynamically reactive to live edits */}
       <MedicationDetailModal
-        medication={selectedDetailMedication}
-        onClose={() => setSelectedDetailMedication(null)}
+        medication={activeDetailMedication}
+        onClose={() => setSelectedMedicationId(null)}
         onEdit={(med) => {
-          setSelectedDetailMedication(null);
           handleEditMedication(med);
         }}
         onPrintSingle={(med) => {
-          setSelectedDetailMedication(null);
           handlePrintSingle(med);
         }}
       />

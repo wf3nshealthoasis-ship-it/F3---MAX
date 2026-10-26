@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { MedicationProvider, useMedications } from './context/MedicationContext';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
@@ -10,11 +10,13 @@ import { PrintMedicationChartModal } from './components/PrintMedicationChartModa
 import { NotificationsModal } from './components/NotificationsModal';
 import { CareWareFrequencyGuideModal } from './components/CareWareFrequencyGuideModal';
 import { SettingsModal } from './components/SettingsModal';
+import { LoginScreen } from './components/LoginScreen';
 import { MedicationItem } from './types/medication';
 import { testConnection } from './firebase';
 import { Plus } from 'lucide-react';
 
 function MainApp() {
+  const { currentUser, loading: authLoading } = useAuth();
   const { medications } = useMedications();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'medications' | 'notifications' | 'settings'>('dashboard');
 
@@ -40,6 +42,26 @@ function MainApp() {
   useEffect(() => {
     testConnection();
   }, []);
+
+  // Show splash / loading state while checking session
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#093547] via-[#095163] to-[#077b7f] text-white">
+        <div className="w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl mb-4">
+          <span className="text-2xl font-extrabold text-white">F3</span>
+        </div>
+        <div className="w-6 h-6 border-2 border-teal-300 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-xs text-teal-100 font-medium tracking-wide">
+          Loading Ward F3 Medication Chart...
+        </p>
+      </div>
+    );
+  }
+
+  // If user is not authenticated, display the exact login screen from user mockup
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
 
   const handleOpenAdd = () => {
     setMedicationToEdit(null);
